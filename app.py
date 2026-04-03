@@ -85,14 +85,27 @@ if missing:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filters")
 
-# Dynamic padj presets based on data range
-if "padj" in df_raw.columns:
+# Dynamic padj presets generated from actual data range
+if "padj" in df_raw.columns and df_raw["padj"].notna().any():
     padj_min = float(df_raw["padj"].min())
     padj_max = float(df_raw["padj"].max())
-    padj_presets = {"Relaxed (0.1)": 0.1, "Standard (0.05)": 0.05, "Strict (0.01)": 0.01, "Very strict (0.001)": 0.001}
-    padj_choice = st.sidebar.selectbox("padj threshold", list(padj_presets.keys()), index=1)
+    all_thresholds = [1.0, 0.1, 0.05, 0.01, 0.001, 1e-5, 1e-10, 1e-20, 1e-50, 1e-100, 1e-150]
+    padj_presets = {"No filter": 1.0}
+    for t in all_thresholds:
+        if t >= padj_min:
+            label = f"padj ≤ {t:.0e}" if t < 0.01 else f"padj ≤ {t}"
+            padj_presets[label] = t
+    # Default: smallest threshold that still keeps >50% of genes
+    _default_key = next(
+        (k for k, v in padj_presets.items() if v >= padj_min * 100 and k != "No filter"),
+        list(padj_presets.keys())[min(1, len(padj_presets) - 1)],
+    )
+    padj_choice = st.sidebar.selectbox(
+        "padj threshold", list(padj_presets.keys()),
+        index=list(padj_presets.keys()).index(_default_key),
+    )
     padj_thresh = padj_presets[padj_choice]
-    st.sidebar.caption(f"Data range: {padj_min:.2e} – {padj_max:.2e}")
+    st.sidebar.caption(f"Data padj range: {padj_min:.1e} – {padj_max:.1e}")
 else:
     padj_thresh = 0.05
 
@@ -495,15 +508,13 @@ synthetic genes — so you can explore every feature before using your own data.
 
     st.markdown("**Sheet Selector (Excel only)**")
     st.markdown("""
-If you uploaded an Excel file, you will see a sheet selector. Your file may have multiple sheets:
-
-- **SDEGs** is the recommended sheet. It contains only the statistically significant genes and is ready
-  to analyze immediately.
-- **SIGNFICANCE SCOREs Gene Types** contains all genes including non-significant ones — useful when you
-  want to see the full picture.
+If you uploaded an Excel file, you will see a sheet selector. Your file may have multiple sheets.
+The app recommends the sheet containing only significant genes — typically the most filtered sheet.
+Other sheets may contain all genes including non-significant ones, which is useful when you want the
+full picture.
 
 If you select a sheet that is missing certain columns (like Gene Type), the app fills them in
-automatically from the SDEGs sheet if possible, or disables that filter with a note. This selector
+automatically from another sheet if possible, or disables that filter with a note. This selector
 does not appear for CSV files since CSVs have only one sheet.
 """)
 
@@ -512,18 +523,15 @@ does not appear for CSV files since CSVs have only one sheet.
 padj is the *adjusted p-value*. It measures how statistically confident we are that a gene is truly
 differentially expressed and not just random noise. A lower padj means more confidence.
 
-The app shows preset options based on your data range:
-- **Relaxed (0.1)** — includes more genes, some may be borderline
-- **Standard (0.05)** — the most common threshold in research papers
-- **Strict (0.01)** — only genes with strong statistical evidence
-- **Very strict (0.001)** — only the most confident results
-
-Start with Standard. Tighten it if you want only the most reliable genes.
+The app generates appropriate threshold options based on your data's actual padj range, shown as a
+caption below the selector. Start with the default selection. Choose a stricter (lower) threshold to
+see only the most confident results, or a more relaxed threshold to include more genes.
 """)
 
     st.markdown("**|log2FC| Threshold**")
     st.markdown("""
-log2 Fold Change measures how much a gene's expression changed between Earth and Space:
+log2 Fold Change measures how much a gene's expression changed between the two conditions in your
+experiment:
 - A value of **1.0** means the gene doubled (or halved) its expression
 - A value of **2.0** means it quadrupled (or quartered)
 - A value of **0** means no change
@@ -533,23 +541,21 @@ A higher threshold shows only large expression changes. Start at 1.0 for a balan
 
     st.markdown("**Gene Types**")
     st.markdown("""
-Genes in your data are classified by type:
-- **protein_coding** — genes that make proteins directly (the majority of known functional genes)
-- **lncRNA** — long non-coding RNA that regulates other genes without making proteins
-- **processed_pseudogene** — inactive copies of genes, usually not functional
+Genes are classified by type — for example protein-coding genes, non-coding RNA, or pseudogenes. The
+options shown depend on what gene types are present in your uploaded file. By default all types are
+selected. Deselect types you are not interested in.
 
-By default all types are shown. Deselect types you are not interested in.
 If this filter is greyed out, it means Gene Type information was not available in your selected sheet.
 """)
 
     st.markdown("**Direction**")
     st.markdown("""
-- **Upregulated** means the gene is *more active* in Space than on Earth
-- **Downregulated** means the gene is *less active* in Space
+- **Upregulated** means the gene is *more active* in the experimental condition
+- **Downregulated** means the gene is *less active* in the experimental condition
 - **All** shows both
 
-Use this filter to focus on one direction. For example, if you are looking for genes activated as a
-stress response in microgravity, filter to Upregulated.
+The exact conditions depend on your experiment design. Use this filter to focus on one direction when
+a specific analysis needs it — for example, to find genes activated as a stress response.
 """)
 
     st.markdown("**Data Summary**")
