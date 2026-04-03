@@ -196,9 +196,9 @@ with st.sidebar.expander("Version Info"):
 # ── Main Tabs ────────────────────────────────────────────────────────────────
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-    "🌋 Volcano Plot", "📊 PCA Plot", "🔥 Top DEGs Heatmap",
-    "🧪 Pathway Enrichment", "💊 Therapeutic Targets", "🔬 Biomarker Discovery",
-    "☠️ Cytotoxicity & Apoptosis", "🏥 Disease Cross-Reference", "📖 User Manual",
+    "🌋 Volcano", "📊 PCA", "🔥 Heatmap",
+    "🧪 Pathways", "💊 Targets", "🔬 Biomarkers",
+    "☠️ Cytotoxicity", "🏥 Disease", "📖 Manual",
 ])
 
 # ── Tab 1: Volcano ──────────────────────────────────────────────────────────
