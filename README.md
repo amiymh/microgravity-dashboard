@@ -2,16 +2,23 @@
 
 A multi-tool Streamlit dashboard for analyzing differentially expressed genes (DEGs) under microgravity vs ground conditions, built on DESeq2 output data.
 
+**Live app:** [https://microgravity-rna.streamlit.app](https://microgravity-rna.streamlit.app)
+
 ## Features
 
-Six integrated analysis tools:
+Nine integrated analysis tools:
 
-1. **Volcano Plot** — Interactive visualization of differential expression (log2FC vs significance)
-2. **Pathway Enrichment** — Query Enrichr for KEGG, GO, Reactome, and WikiPathway enrichment
-3. **Therapeutic Targets** — Identify drug-gene interactions via DGIdb
-4. **Biomarker Discovery** — Find potential disease biomarkers using OpenTargets
-5. **Cytotoxicity & Apoptosis** — Overlap analysis with curated hallmark gene sets (apoptosis, TNF, p53, ROS, inflammation)
-6. **Disease Cross-Reference** — Search any disease and find overlap with microgravity DEGs via OpenTargets
+1. **Volcano Plot** — Interactive visualization with adjustText non-overlapping labels
+2. **PCA Plot** — Sample clustering (Earth vs Space) with gene loadings
+3. **Top DEGs Heatmap** — Z-score normalized expression heatmap with hierarchical clustering
+4. **Pathway Enrichment** — Query Enrichr for KEGG, GO, Reactome, and WikiPathway enrichment
+5. **Therapeutic Targets** — Identify drug-gene interactions via DGIdb + OpenTargets
+6. **Biomarker Discovery** — Find potential disease biomarkers using OpenTargets
+7. **Cytotoxicity & Apoptosis** — Overlap with MSigDB hallmark gene sets (live API)
+8. **Disease Cross-Reference** — Search any disease and find overlap with microgravity DEGs
+9. **User Manual** — Full documentation and transparency guide
+
+Plus: Methods Report (.docx), Jupyter Notebook (.ipynb), and full Results ZIP downloads.
 
 ## Setup
 
@@ -41,8 +48,9 @@ The primary data file is: `Supplementary Data 1 DESEQ2 normalized out and signif
 
 ## Deployment
 
-Deployed on Streamlit Community Cloud:
-<!-- Add URL after deployment -->
+Live at: [https://microgravity-rna.streamlit.app](https://microgravity-rna.streamlit.app)
+
+Auto-deploys on every push to `main`.
 
 ## Running Tests
 
