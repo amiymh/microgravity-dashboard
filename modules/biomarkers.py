@@ -78,18 +78,16 @@ def query_opentargets_batch(
 def find_biomarkers(
     df: pd.DataFrame,
     min_log2fc: float = 2.0,
-    min_sig_score: float = 0.0,
     progress_callback=None,
 ) -> pd.DataFrame:
     """Identify biomarker candidates among ALL filtered DEGs.
 
-    Processes all genes that pass the thresholds using batched API calls
-    with rate limiting. No silent cutoffs.
+    Processes all genes that pass the |log2FC| threshold using batched API calls
+    with rate limiting. Both upregulated and downregulated genes are included.
 
     Args:
         df: DEG dataframe with Gene, log2FoldChange, padj, significance score, etc.
         min_log2fc: Minimum |log2FC| filter.
-        min_sig_score: Minimum significance score filter.
         progress_callback: Optional callable(current, total) for progress updates.
 
     Returns:
@@ -98,19 +96,19 @@ def find_biomarkers(
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
 
-    # Filter by thresholds
+    # Filter by absolute log2FC (includes both up and downregulated)
     candidates = df.copy()
     if "log2FoldChange" in candidates.columns:
         candidates = candidates[candidates["log2FoldChange"].abs() >= min_log2fc]
-    if "significance score" in candidates.columns and min_sig_score > 0:
-        candidates = candidates[candidates["significance score"] >= min_sig_score]
 
     if candidates.empty:
         return pd.DataFrame()
 
-    # Sort by significance score for best results first
+    # Sort by absolute significance score (includes both directions)
     if "significance score" in candidates.columns:
-        candidates = candidates.sort_values("significance score", ascending=False)
+        candidates = candidates.assign(
+            _abs_sig=candidates["significance score"].abs()
+        ).sort_values("_abs_sig", ascending=False).drop(columns=["_abs_sig"])
 
     # Build gene list for batch querying
     gene_list = []
@@ -239,14 +237,13 @@ def get_analysis_log(
     genes_filtered: int = 0,
     genes_processed: int = 0,
     min_log2fc: float = 2.0,
-    min_sig_score: float = 0.0,
     result_df: pd.DataFrame | None = None,
 ) -> list[str]:
     """Return analysis log for biomarker discovery."""
     from datetime import datetime
     log = [
         f"Genes passing |log2FC| >= {min_log2fc} filter: {genes_filtered}",
-        f"Minimum significance score filter: {min_sig_score}",
+        "Both upregulated and downregulated genes included.",
         f"Total genes processed (no cap): {genes_processed}",
         f"Batch size: {BATCH_SIZE} genes per batch",
         f"Rate limit: {BATCH_DELAY_SECONDS}s delay between batches",

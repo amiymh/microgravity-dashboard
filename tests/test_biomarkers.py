@@ -61,10 +61,11 @@ class TestFindBiomarkers:
         assert len(high) <= len(low)
 
     def test_no_max_genes_parameter(self):
-        """find_biomarkers should NOT have a max_genes parameter."""
+        """find_biomarkers should NOT have a max_genes or min_sig_score parameter."""
         import inspect
         sig = inspect.signature(find_biomarkers)
         assert "max_genes" not in sig.parameters
+        assert "min_sig_score" not in sig.parameters
 
     def test_processes_all_filtered_genes(self):
         """All genes passing the threshold should be processed, not capped."""

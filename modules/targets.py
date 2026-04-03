@@ -115,9 +115,18 @@ def get_therapeutic_targets(
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
 
-    # Get top genes by significance score
-    if "significance score" in df.columns:
-        top_genes_df = df.nlargest(min(top_n, len(df)), "significance score")
+    # Get top genes by absolute significance score, balanced across directions
+    if "significance score" in df.columns and "Direction" in df.columns:
+        df_sorted = df.copy()
+        df_sorted["_abs_sig"] = df_sorted["significance score"].abs()
+        half = max(top_n // 2, 1)
+        up = df_sorted[df_sorted["Direction"] == "Upregulated"].nlargest(min(half, len(df_sorted)), "_abs_sig")
+        down = df_sorted[df_sorted["Direction"] == "Downregulated"].nlargest(min(half, len(df_sorted)), "_abs_sig")
+        top_genes_df = pd.concat([up, down]).drop(columns=["_abs_sig"]).head(top_n)
+    elif "significance score" in df.columns:
+        df_sorted = df.copy()
+        df_sorted["_abs_sig"] = df_sorted["significance score"].abs()
+        top_genes_df = df_sorted.nlargest(min(top_n, len(df_sorted)), "_abs_sig").drop(columns=["_abs_sig"])
     else:
         top_genes_df = df.head(top_n)
 

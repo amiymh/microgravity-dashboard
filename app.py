@@ -19,7 +19,7 @@ from modules.disease import (
     search_disease, cross_reference, create_venn_diagram, create_network_graph,
     get_analysis_log as disease_log,
 )
-from modules.fig_export import add_download_buttons
+from modules.fig_export import add_download_buttons, fig_to_png
 from modules.versions import get_session_versions, get_api_versions, format_versions_text
 from modules.report import generate_report
 from modules.notebook import generate_notebook
@@ -156,6 +156,9 @@ with tab1:
     fig = create_volcano_plot(df_raw, v_padj, v_fc, v_n, v_color)
     st.plotly_chart(fig, use_container_width=True)
     add_download_buttons(st, fig, "volcano_plot")
+    _png = fig_to_png(fig)
+    if _png:
+        st.session_state["figures"]["volcano_plot.png"] = _png
 
     top20 = get_top_significant(df_raw, 20)
     if not top20.empty:
@@ -163,6 +166,7 @@ with tab1:
         st.dataframe(top20, use_container_width=True, hide_index=True)
     csv = df.to_csv(index=False)
     st.download_button("Download filtered gene list (CSV)", csv, "filtered_genes.csv", "text/csv")
+    st.session_state["data_csvs"]["filtered_genes.csv"] = csv.encode()
 
     log = volcano_log(df_raw, v_padj, v_fc, v_n)
     st.session_state["analysis_logs"]["Volcano Plot"] = log
@@ -180,6 +184,9 @@ with tab2:
         fig = create_pca_plot(pca_result)
         st.plotly_chart(fig, use_container_width=True)
         add_download_buttons(st, fig, "pca_plot")
+        _png = fig_to_png(fig)
+        if _png:
+            st.session_state["figures"]["pca_plot.png"] = _png
 
         st.subheader("Top Gene Loadings (PC1 & PC2)")
         loadings_df = get_loadings(df_raw, pca_result["pca_model"])
@@ -207,6 +214,9 @@ with tab3:
         fig = create_heatmap_figure(hm_data)
         st.plotly_chart(fig, use_container_width=True)
         add_download_buttons(st, fig, "heatmap")
+        _png = fig_to_png(fig)
+        if _png:
+            st.session_state["figures"]["heatmap.png"] = _png
 
         if "gene_info" in hm_data and not hm_data["gene_info"].empty:
             st.subheader("Gene Table")
@@ -248,6 +258,9 @@ with tab4:
                 fig = create_pathway_chart(results, p_top)
                 st.plotly_chart(fig, use_container_width=True)
                 add_download_buttons(st, fig, "pathways")
+                _png = fig_to_png(fig)
+                if _png:
+                    st.session_state["figures"]["pathways.png"] = _png
                 st.dataframe(results, use_container_width=True, hide_index=True)
                 csv = results.to_csv(index=False)
                 st.download_button("Download pathway results (CSV)", csv, "pathways.csv", "text/csv")
@@ -296,9 +309,8 @@ with tab5:
 
 with tab6:
     st.header("Biomarker Discovery")
-    bc1, bc2 = st.columns(2)
-    b_fc = bc1.slider("Min |log2FC|", 0.5, 5.0, 2.0, 0.1, key="b_fc")
-    b_sig = bc2.slider("Min significance score", 0.0, 100.0, 0.0, 1.0, key="b_sig")
+    b_fc = st.slider("Min |log2FC|", 0.5, 5.0, 2.0, 0.1, key="b_fc")
+    st.caption("Both upregulated and downregulated genes are included.")
 
     if st.button("Find Biomarker Candidates", key="run_bio"):
         bar = st.progress(0, text="Querying OpenTargets...")
@@ -306,7 +318,7 @@ with tab6:
         def _update(cur, tot):
             bar.progress(cur / tot, text=f"Querying... {cur}/{tot} genes")
 
-        biomarkers = find_biomarkers(df, min_log2fc=b_fc, min_sig_score=b_sig, progress_callback=_update)
+        biomarkers = find_biomarkers(df, min_log2fc=b_fc, progress_callback=_update)
         bar.empty()
         st.session_state["biomarkers"] = biomarkers
 
@@ -316,11 +328,14 @@ with tab6:
         fig = create_biomarker_scatter(biomarkers)
         st.plotly_chart(fig, use_container_width=True)
         add_download_buttons(st, fig, "biomarkers")
+        _png = fig_to_png(fig)
+        if _png:
+            st.session_state["figures"]["biomarkers.png"] = _png
         csv = biomarkers.to_csv(index=False)
         st.download_button("Download biomarkers (CSV)", csv, "biomarkers.csv", "text/csv")
         st.session_state["data_csvs"]["biomarkers.csv"] = csv.encode()
 
-        log = biomarkers_log(len(df), len(biomarkers), b_fc, b_sig, biomarkers)
+        log = biomarkers_log(len(df), len(biomarkers), b_fc, biomarkers)
         st.session_state["analysis_logs"]["Biomarker Discovery"] = log
         with st.expander("🔍 Analysis Details — click to verify"):
             for line in log:
@@ -341,6 +356,9 @@ with tab7:
             fig = create_overlap_bar_chart(overlaps)
             st.plotly_chart(fig, use_container_width=True)
             add_download_buttons(st, fig, "cytotoxicity_bar")
+            _png = fig_to_png(fig)
+            if _png:
+                st.session_state["figures"]["cytotoxicity_bar.png"] = _png
 
             matrix = get_gene_pathway_matrix(df, sel_pw)
             if not matrix.empty:
@@ -348,6 +366,9 @@ with tab7:
                 hfig = create_heatmap(matrix)
                 st.plotly_chart(hfig, use_container_width=True)
                 add_download_buttons(st, hfig, "cytotoxicity_heatmap")
+                _png = fig_to_png(hfig)
+                if _png:
+                    st.session_state["figures"]["cytotoxicity_heatmap.png"] = _png
 
             gene_tbl = get_gene_table(df, sel_pw)
             if not gene_tbl.empty:
@@ -405,6 +426,9 @@ with tab8:
                     net = create_network_graph(overlap_df, disease_name)
                     st.plotly_chart(net, use_container_width=True)
                     add_download_buttons(st, net, "disease_network")
+                    _png = fig_to_png(net)
+                    if _png:
+                        st.session_state["figures"]["disease_network.png"] = _png
                     csv = overlap_df.to_csv(index=False)
                     st.download_button("Download overlap (CSV)", csv, "disease_overlap.csv", "text/csv")
                     st.session_state["data_csvs"]["disease_overlap.csv"] = csv.encode()
