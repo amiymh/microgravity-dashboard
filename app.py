@@ -180,7 +180,7 @@ with tab2:
         add_download_buttons(st, fig, "pca_plot")
 
         st.subheader("Top Gene Loadings (PC1 & PC2)")
-        loadings_df = get_loadings(pca_result)
+        loadings_df = get_loadings(df_raw, pca_result["pca_model"])
         if loadings_df is not None and not loadings_df.empty:
             st.dataframe(loadings_df, use_container_width=True, hide_index=True)
 
