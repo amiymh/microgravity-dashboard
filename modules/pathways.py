@@ -153,3 +153,28 @@ def create_pathway_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
     )
 
     return fig
+
+
+def get_analysis_log(
+    gene_count: int = 0,
+    gene_set: str = "",
+    direction: str = "All",
+    results_df: pd.DataFrame | None = None,
+    is_live: bool = True,
+    list_id: str | None = None,
+) -> list[str]:
+    """Return analysis log for pathway enrichment."""
+    from datetime import datetime
+    log = [
+        f"Gene list submitted: {gene_count} genes",
+        f"Direction filter: {direction}",
+        f"Gene set library: {gene_set}",
+        f"API endpoint: {ENRICHR_URL}",
+    ]
+    if list_id:
+        log.append(f"Enrichr list ID: {list_id}")
+    log.append(f"Timestamp: {datetime.now().isoformat()}")
+    log.append(f"Data source: {'Enrichr API (live)' if is_live else 'Demo/fallback data'}")
+    n = len(results_df) if results_df is not None and not results_df.empty else 0
+    log.append(f"Results returned: {n} pathways")
+    return log

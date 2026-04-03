@@ -75,14 +75,24 @@ def generate_demo_data(n: int = 50) -> pd.DataFrame:
     return df
 
 
+def _get_name(source) -> str:
+    """Get filename from a path string or file-like object."""
+    if isinstance(source, str):
+        return source
+    if hasattr(source, "name"):
+        return source.name
+    return ""
+
+
 def _is_csv(source) -> bool:
     """Check if the source is a CSV file (by name or path)."""
-    name = ""
-    if isinstance(source, str):
-        name = source
-    elif hasattr(source, "name"):
-        name = source.name
-    return name.lower().endswith(".csv")
+    return _get_name(source).lower().endswith(".csv")
+
+
+def _has_extension(source) -> bool:
+    """Check if the source has a recognizable file extension."""
+    name = _get_name(source).lower()
+    return name.endswith(".csv") or name.endswith(".xlsx") or name.endswith(".xls")
 
 
 def load_excel(
@@ -108,8 +118,16 @@ def load_excel(
     try:
         if _is_csv(source):
             df = pd.read_csv(source)
-        else:
+        elif _has_extension(source):
             df = pd.read_excel(source, sheet_name=sheet_name, engine="openpyxl")
+        else:
+            # No detectable extension — try Excel first, then CSV
+            try:
+                df = pd.read_excel(source, sheet_name=sheet_name, engine="openpyxl")
+            except Exception:
+                if hasattr(source, "seek"):
+                    source.seek(0)
+                df = pd.read_csv(source)
     except FileNotFoundError:
         return generate_demo_data()
     except Exception:

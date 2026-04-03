@@ -240,3 +240,29 @@ def get_target_summary(targets_df: pd.DataFrame) -> dict:
         "total_drugs": targets_df["Drug Name"].nunique() if "Drug Name" in targets_df.columns else 0,
         "with_clinical_stage": with_stage,
     }
+
+
+def get_analysis_log(
+    genes_queried: int = 0,
+    targets_df: pd.DataFrame | None = None,
+) -> list[str]:
+    """Return analysis log for therapeutic targets."""
+    from datetime import datetime
+    log = [
+        f"Genes queried: {genes_queried} (top by significance score)",
+        f"DGIdb API endpoint: {DGIDB_URL}",
+        f"DGIdb batch size: 20 genes per request",
+        f"OpenTargets API endpoint: {OPENTARGETS_URL}",
+        f"Timestamp: {datetime.now().isoformat()}",
+    ]
+    if targets_df is not None and not targets_df.empty:
+        n_genes = targets_df["Gene"].nunique()
+        n_drugs = targets_df["Drug Name"].nunique() if "Drug Name" in targets_df.columns else 0
+        sources = targets_df["Source"].unique().tolist() if "Source" in targets_df.columns else []
+        log.append(f"Genes with drug interactions found: {n_genes}")
+        log.append(f"Unique drugs found: {n_drugs}")
+        log.append(f"Data sources: {', '.join(str(s) for s in sources)}")
+    else:
+        log.append("No drug interactions found.")
+    log.append("Clinical Stage shown only when explicitly returned by OpenTargets API.")
+    return log

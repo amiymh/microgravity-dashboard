@@ -121,6 +121,22 @@ class TestLoadCSV:
         df = load_excel(uploaded_file=fake_upload)
         assert len(df) == 5
 
+    def test_csv_and_excel_produce_same_output(self, tmp_path):
+        """CSV and Excel should produce identical cleaned output for same data."""
+        demo = generate_demo_data(n=15)
+
+        csv_file = tmp_path / "data.csv"
+        demo.to_csv(csv_file, index=False)
+
+        xlsx_file = tmp_path / "data.xlsx"
+        demo.to_excel(xlsx_file, index=False, sheet_name="SDEGs")
+
+        df_csv = load_excel(str(csv_file))
+        df_xlsx = load_excel(str(xlsx_file), sheet_name="SDEGs")
+
+        assert list(df_csv.columns) == list(df_xlsx.columns)
+        assert len(df_csv) == len(df_xlsx)
+
     def test_csv_sheet_name_ignored(self, tmp_path):
         """sheet_name parameter should be silently ignored for CSV files."""
         csv_file = tmp_path / "data.csv"

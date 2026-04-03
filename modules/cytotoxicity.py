@@ -255,3 +255,33 @@ def get_gene_table(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.Da
     if not result.empty:
         result = result.sort_values("Pathway Count", ascending=False)
     return result.reset_index(drop=True)
+
+
+def get_analysis_log(
+    overlap_df: pd.DataFrame | None = None,
+    pathways_used: list[str] | None = None,
+) -> list[str]:
+    """Return analysis log for cytotoxicity/apoptosis analysis."""
+    from datetime import datetime
+    log = [
+        f"MSigDB API endpoint: {MSIGDB_URL}",
+        f"Timestamp: {datetime.now().isoformat()}",
+        "Statistical test: Fisher's exact test (one-sided, greater)",
+        "Background gene universe: 20,000 human genes (approximate)",
+    ]
+    selected = pathways_used or list(HALLMARK_IDS.keys())
+    for name in selected:
+        if name in _gene_set_cache:
+            source = "MSigDB API" if is_live_data(name) else "Fallback (hardcoded)"
+            log.append(f"Gene set '{name}': {len(_gene_set_cache[name])} genes ({source})")
+    if overlap_df is not None and not overlap_df.empty:
+        for _, row in overlap_df.iterrows():
+            pw = row["Pathway"]
+            a = row["DEG Overlap"]
+            b = row["Pathway Size"] - a
+            log.append(f"  {pw}: overlap={a}, pathway_only={b}, Fisher p={row['Fisher p-value']:.2e}")
+            if row.get("Overlap Genes"):
+                log.append(f"    Overlap genes: {row['Overlap Genes']}")
+    else:
+        log.append("No overlap computed yet.")
+    return log

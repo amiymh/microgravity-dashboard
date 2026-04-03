@@ -263,3 +263,32 @@ def create_network_graph(overlap_df: pd.DataFrame, disease_name: str = "Disease"
     )
 
     return fig
+
+
+def get_analysis_log(
+    disease_name: str = "",
+    disease_id: str = "",
+    min_score: float = 0.3,
+    direction: str = "All",
+    summary: dict | None = None,
+) -> list[str]:
+    """Return analysis log for disease cross-reference."""
+    from datetime import datetime
+    log = [
+        f"Disease searched: '{disease_name}'",
+        f"Disease EFO ID: {disease_id}" if disease_id else "Disease EFO ID: not resolved",
+        f"Association score threshold: {min_score}",
+        f"Direction filter: {direction}",
+        f"API endpoint: {OPENTARGETS_URL}",
+        f"Timestamp: {datetime.now().isoformat()}",
+    ]
+    if summary:
+        log.append(f"Disease genes returned by OpenTargets: {summary.get('disease_genes', 0)}")
+        log.append(f"DEGs queried: {summary.get('deg_total', 0)}")
+        log.append(f"Overlapping genes found: {summary.get('overlap', 0)}")
+        if summary.get('disease_genes', 0) > 0:
+            pct = 100 * summary.get('overlap', 0) / summary['disease_genes']
+            log.append(f"Overlap percentage: {pct:.1f}% of disease genes are DEGs")
+    else:
+        log.append("Cross-reference not yet run.")
+    return log

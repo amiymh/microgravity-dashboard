@@ -233,3 +233,36 @@ def create_biomarker_scatter(df: pd.DataFrame) -> go.Figure:
     )
 
     return fig
+
+
+def get_analysis_log(
+    genes_filtered: int = 0,
+    genes_processed: int = 0,
+    min_log2fc: float = 2.0,
+    min_sig_score: float = 0.0,
+    result_df: pd.DataFrame | None = None,
+) -> list[str]:
+    """Return analysis log for biomarker discovery."""
+    from datetime import datetime
+    log = [
+        f"Genes passing |log2FC| >= {min_log2fc} filter: {genes_filtered}",
+        f"Minimum significance score filter: {min_sig_score}",
+        f"Total genes processed (no cap): {genes_processed}",
+        f"Batch size: {BATCH_SIZE} genes per batch",
+        f"Rate limit: {BATCH_DELAY_SECONDS}s delay between batches",
+        f"Total batches: {max(1, (genes_processed + BATCH_SIZE - 1) // BATCH_SIZE) if genes_processed > 0 else 0}",
+        f"API endpoint: {OPENTARGETS_URL}",
+        f"Timestamp: {datetime.now().isoformat()}",
+    ]
+    if result_df is not None and not result_df.empty:
+        with_assoc = (result_df.get("Disease Score", pd.Series()) > 0).sum()
+        no_assoc = len(result_df) - with_assoc
+        log.append(f"Genes with disease associations: {with_assoc}")
+        log.append(f"Genes with no associations found: {no_assoc}")
+        log.append(f"Biomarker score formula: |log2FC| × -log10(padj) × (disease_score + 0.1)")
+        if not result_df.empty:
+            top = result_df.iloc[0]
+            log.append(f"Example: {top.get('Gene','?')} score = |{top.get('log2FoldChange',0):.2f}| × -log10({top.get('padj',1):.2e}) × ({top.get('Disease Score',0):.2f} + 0.1)")
+    else:
+        log.append("No biomarker candidates found.")
+    return log

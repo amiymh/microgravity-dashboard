@@ -7,7 +7,10 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from modules.data_loader import generate_demo_data
-from modules.volcano import classify_genes, create_volcano_plot, get_top_significant
+from modules.volcano import (
+    classify_genes, create_volcano_plot, get_top_significant,
+    get_analysis_log, _HAS_ADJUSTTEXT,
+)
 
 
 @pytest.fixture
@@ -56,6 +59,15 @@ class TestCreateVolcanoPlot:
         fig = create_volcano_plot(demo_df, label_top_n=0)
         assert fig is not None
 
+    def test_labels_with_adjusttext(self, demo_df):
+        """Labels render without error whether adjustText is available or not."""
+        fig = create_volcano_plot(demo_df, label_top_n=10)
+        assert fig is not None
+
+    def test_adjusttext_available(self):
+        """adjustText library should be installed."""
+        assert _HAS_ADJUSTTEXT is True
+
 
 class TestGetTopSignificant:
     def test_returns_top_n(self, demo_df):
@@ -76,3 +88,25 @@ class TestGetTopSignificant:
         result = get_top_significant(demo_df)
         assert "Gene" in result.columns
         assert "log2FoldChange" in result.columns
+
+
+class TestAnalysisLog:
+    def test_returns_list(self, demo_df):
+        log = get_analysis_log(demo_df)
+        assert isinstance(log, list)
+        assert len(log) > 0
+
+    def test_all_strings(self, demo_df):
+        log = get_analysis_log(demo_df)
+        assert all(isinstance(s, str) for s in log)
+
+    def test_contains_keywords(self, demo_df):
+        log = get_analysis_log(demo_df)
+        text = " ".join(log)
+        assert "genes" in text.lower()
+        assert "threshold" in text.lower()
+
+    def test_empty_input(self):
+        log = get_analysis_log(pd.DataFrame())
+        assert isinstance(log, list)
+        assert len(log) > 0
