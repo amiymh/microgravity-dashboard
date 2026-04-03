@@ -75,16 +75,26 @@ def generate_demo_data(n: int = 50) -> pd.DataFrame:
     return df
 
 
+def _is_csv(source) -> bool:
+    """Check if the source is a CSV file (by name or path)."""
+    name = ""
+    if isinstance(source, str):
+        name = source
+    elif hasattr(source, "name"):
+        name = source.name
+    return name.lower().endswith(".csv")
+
+
 def load_excel(
     file_path: str | None = None,
     sheet_name: str = "SDEGs",
     uploaded_file=None,
 ) -> pd.DataFrame:
-    """Load DESeq2 data from Excel.
+    """Load DESeq2 data from Excel or CSV.
 
     Args:
-        file_path: Path to xlsx file on disk.
-        sheet_name: Sheet to load (SDEGs or SIGNFICANCE SCOREs Gene Types).
+        file_path: Path to xlsx/csv file on disk.
+        sheet_name: Sheet to load (ignored for CSV files).
         uploaded_file: Streamlit UploadedFile object (takes priority over file_path).
 
     Returns:
@@ -96,7 +106,10 @@ def load_excel(
         source = DEFAULT_PATH
 
     try:
-        df = pd.read_excel(source, sheet_name=sheet_name, engine="openpyxl")
+        if _is_csv(source):
+            df = pd.read_csv(source)
+        else:
+            df = pd.read_excel(source, sheet_name=sheet_name, engine="openpyxl")
     except FileNotFoundError:
         return generate_demo_data()
     except Exception:

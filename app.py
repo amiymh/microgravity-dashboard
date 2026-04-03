@@ -29,7 +29,7 @@ st.sidebar.title("Microgravity RNA Dashboard")
 st.sidebar.markdown("Analyze differentially expressed genes under microgravity vs ground conditions.")
 
 # File upload
-uploaded_file = st.sidebar.file_uploader("Upload DESeq2 Excel file", type=["xlsx"])
+uploaded_file = st.sidebar.file_uploader("Upload DESeq2 file", type=["xlsx", "csv"])
 
 # Sheet selector
 sheet_options = ["SDEGs", "SIGNFICANCE SCOREs Gene Types"]

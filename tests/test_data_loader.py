@@ -73,6 +73,63 @@ class TestLoadExcel:
         assert len(df.columns) < 30
 
 
+class TestLoadCSV:
+    def test_load_csv_with_correct_columns(self, tmp_path):
+        """A CSV with the right columns should load and clean correctly."""
+        csv_file = tmp_path / "test_data.csv"
+        demo = generate_demo_data(n=10)
+        demo.to_csv(csv_file, index=False)
+
+        df = load_excel(str(csv_file))
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 10
+        assert "Gene" in df.columns
+        assert "Direction" in df.columns
+
+    def test_csv_missing_columns_still_loads(self, tmp_path):
+        """A CSV with some missing columns should load without crashing."""
+        csv_file = tmp_path / "partial.csv"
+        pd.DataFrame({
+            "Gene": ["TP53", "TNF", "IL6"],
+            "log2FoldChange": [2.5, -1.3, 0.8],
+            "padj": [0.001, 0.01, 0.05],
+        }).to_csv(csv_file, index=False)
+
+        df = load_excel(str(csv_file))
+        assert len(df) == 3
+        assert "Gene" in df.columns
+        # Direction should be auto-filled from log2FoldChange
+        assert "Direction" in df.columns
+        assert df.loc[df["Gene"] == "TP53", "Direction"].iloc[0] == "Upregulated"
+
+    def test_csv_fallback_on_missing_file(self):
+        df = load_excel("/nonexistent/path.csv")
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 50  # demo fallback
+
+    def test_csv_uploaded_file_object(self, tmp_path):
+        """Simulate a Streamlit UploadedFile-like object with a .name attribute."""
+        import io
+        csv_file = tmp_path / "upload.csv"
+        demo = generate_demo_data(n=5)
+        demo.to_csv(csv_file, index=False)
+
+        # Mimic UploadedFile: BytesIO with a .name attribute
+        content = csv_file.read_bytes()
+        fake_upload = io.BytesIO(content)
+        fake_upload.name = "upload.csv"
+        df = load_excel(uploaded_file=fake_upload)
+        assert len(df) == 5
+
+    def test_csv_sheet_name_ignored(self, tmp_path):
+        """sheet_name parameter should be silently ignored for CSV files."""
+        csv_file = tmp_path / "data.csv"
+        generate_demo_data(n=3).to_csv(csv_file, index=False)
+
+        df = load_excel(str(csv_file), sheet_name="SDEGs")
+        assert len(df) == 3
+
+
 class TestValidateColumns:
     def test_valid_dataframe(self):
         df = generate_demo_data()
