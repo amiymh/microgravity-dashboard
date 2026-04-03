@@ -85,27 +85,52 @@ if missing:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filters")
 
-# Dynamic padj presets generated from actual data range
+# Two-stage padj filter: dropdown picks range bracket, slider fine-tunes within it
 if "padj" in df_raw.columns and df_raw["padj"].notna().any():
     padj_min = float(df_raw["padj"].min())
     padj_max = float(df_raw["padj"].max())
-    all_thresholds = [1.0, 0.1, 0.05, 0.01, 0.001, 1e-5, 1e-10, 1e-20, 1e-50, 1e-100, 1e-150]
-    padj_presets = {"No filter": 1.0}
-    for t in all_thresholds:
-        if t >= padj_min:
-            label = f"padj ≤ {t:.0e}" if t < 0.01 else f"padj ≤ {t}"
-            padj_presets[label] = t
-    # Default: smallest threshold that still keeps >50% of genes
-    _default_key = next(
-        (k for k, v in padj_presets.items() if v >= padj_min * 100 and k != "No filter"),
-        list(padj_presets.keys())[min(1, len(padj_presets) - 1)],
+
+    # Build range brackets from data
+    _boundaries = [1.0, 0.1, 0.05, 0.01, 0.001, 1e-5, 1e-10, 1e-20, 1e-50, 1e-100, 1e-150]
+    # Keep only boundaries within data range, plus one above max
+    _relevant = sorted([b for b in _boundaries if b >= padj_min * 0.1], reverse=True)
+    if not _relevant or _relevant[0] < padj_max:
+        _relevant.insert(0, 1.0)
+
+    _ranges = []
+    for i in range(len(_relevant) - 1):
+        hi, lo = _relevant[i], _relevant[i + 1]
+        if lo < padj_max * 1.1 and hi >= padj_min:
+            _lo_fmt = f"{lo:.0e}" if lo < 0.01 else str(lo)
+            _hi_fmt = f"{hi:.0e}" if hi < 0.01 else str(hi)
+            _ranges.append((f"{_lo_fmt} – {_hi_fmt}", lo, hi))
+    if not _ranges:
+        _ranges = [("Full range", padj_min, padj_max)]
+
+    # Default: bracket containing 0.05, or the first one
+    _default_idx = 0
+    for i, (_, lo, hi) in enumerate(_ranges):
+        if lo <= 0.05 <= hi:
+            _default_idx = i
+            break
+
+    _range_choice = st.sidebar.selectbox(
+        "padj range", [r[0] for r in _ranges],
+        index=_default_idx, key="padj_range",
     )
-    padj_choice = st.sidebar.selectbox(
-        "padj threshold", list(padj_presets.keys()),
-        index=list(padj_presets.keys()).index(_default_key),
+    _sel = next(r for r in _ranges if r[0] == _range_choice)
+    _slider_lo, _slider_hi = _sel[1], _sel[2]
+
+    # Slider within the selected bracket
+    padj_thresh = st.sidebar.slider(
+        "Fine-tune padj", min_value=_slider_lo, max_value=_slider_hi,
+        value=_slider_hi, step=(_slider_hi - _slider_lo) / 100 or _slider_lo,
+        format="%.2e", key="padj_fine",
     )
-    padj_thresh = padj_presets[padj_choice]
-    st.sidebar.caption(f"Data padj range: {padj_min:.1e} – {padj_max:.1e}")
+
+    # Show gene count at current threshold
+    _n_pass = int((df_raw["padj"] <= padj_thresh).sum())
+    st.sidebar.caption(f"padj ≤ {padj_thresh:.2e} → {_n_pass:,} genes pass  (data range: {padj_min:.1e} – {padj_max:.1e})")
 else:
     padj_thresh = 0.05
 
@@ -523,9 +548,11 @@ does not appear for CSV files since CSVs have only one sheet.
 padj is the *adjusted p-value*. It measures how statistically confident we are that a gene is truly
 differentially expressed and not just random noise. A lower padj means more confidence.
 
-The app generates appropriate threshold options based on your data's actual padj range, shown as a
-caption below the selector. Start with the default selection. Choose a stricter (lower) threshold to
-see only the most confident results, or a more relaxed threshold to include more genes.
+The filter has two steps: first, select a **range bracket** from the dropdown — this sets the broad
+level of strictness. Then use the **slider** to fine-tune the exact threshold within that range.
+The caption below shows how many genes pass at your current threshold and the full data range.
+Start with the default. Move the slider left for stricter filtering (fewer, more confident genes)
+or right for more relaxed filtering (more genes, some less certain).
 """)
 
     st.markdown("**|log2FC| Threshold**")
