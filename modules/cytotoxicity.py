@@ -1,69 +1,87 @@
-"""Cytotoxicity & apoptosis analysis using curated hallmark gene sets."""
+"""Cytotoxicity & apoptosis analysis using MSigDB hallmark gene sets."""
 
 import pandas as pd
 import numpy as np
 from scipy import stats
+import requests
 import plotly.graph_objects as go
 
-# Curated hallmark gene sets (from MSigDB literature)
-HALLMARK_SETS = {
-    "Apoptosis": [
-        "CASP1", "CASP2", "CASP3", "CASP4", "CASP6", "CASP7", "CASP8", "CASP9", "CASP10",
-        "BAX", "BAK1", "BCL2", "BCL2L1", "BCL2L11", "BID", "BIK", "BIRC2", "BIRC3",
-        "XIAP", "MCL1", "CYCS", "APAF1", "DIABLO", "DFFA", "DFFB", "ENDOG",
-        "AIFM1", "PARP1", "PARP2", "TNFRSF10A", "TNFRSF10B", "TNFRSF1A",
-        "FAS", "FADD", "TRADD", "RIPK1", "CFLAR", "GADD45A", "GADD45B",
-        "TP53", "CDKN1A", "BBC3", "PMAIP1", "ATM", "CHEK2", "PIDD1",
-        "LMNA", "LMNB1", "SPTAN1", "ADD1", "SATB1", "HMGB2",
-        "NFKB1", "RELA", "NFKBIA", "TNF", "TNFSF10",
-        "CRADD", "DAPK1", "DAPK2", "DAP", "DAXX",
-    ],
-    "TNF Signaling via NF-kB": [
-        "TNF", "TNFAIP3", "TNFRSF1A", "TNFRSF1B", "TRADD", "TRAF1", "TRAF2",
-        "NFKB1", "NFKB2", "RELA", "RELB", "NFKBIA", "NFKBIB", "NFKBIE",
-        "IKBKB", "IKBKG", "CHUK", "MAP3K7", "TAB1", "TAB2",
-        "BIRC2", "BIRC3", "XIAP", "CFLAR", "RIPK1",
-        "CXCL1", "CXCL2", "CXCL3", "CXCL8", "CCL2", "CCL5", "CCL20",
-        "IL6", "IL1B", "IL1A", "CSF1", "CSF2", "LIF",
-        "ICAM1", "VCAM1", "SELE", "MMP9", "PTGS2",
-        "BCL2A1", "BCL3", "IRF1", "JUNB", "FOS", "FOSB", "ATF3",
-        "NFKBIZ", "SOD2", "TNIP1", "TNIP2", "ZFP36",
-    ],
-    "p53 Pathway": [
-        "TP53", "MDM2", "MDM4", "CDKN1A", "CDKN2A", "RB1",
-        "BAX", "BBC3", "PMAIP1", "BID", "GADD45A", "GADD45B", "GADD45G",
-        "SESN1", "SESN2", "ATM", "ATR", "CHEK1", "CHEK2",
-        "DDB2", "XPC", "POLK", "RRM2B", "TIGAR", "SCO2",
-        "PTEN", "TSC2", "DRAM1", "ZMAT3", "PERP", "EI24",
-        "FAS", "TNFRSF10B", "PIDD1", "CASP1", "CASP8",
-        "SERPINE1", "THBS1", "MASPIN", "GLS2", "FDXR",
-        "STEAP3", "PML", "SIVA1", "TP53I3", "TP53INP1",
-    ],
-    "Reactive Oxygen Species": [
-        "SOD1", "SOD2", "SOD3", "CAT", "GPX1", "GPX2", "GPX3", "GPX4",
-        "PRDX1", "PRDX2", "PRDX3", "PRDX4", "PRDX5", "PRDX6",
-        "TXN", "TXN2", "TXNRD1", "TXNRD2", "GLRX", "GLRX2",
-        "GSR", "GCLC", "GCLM", "GSS", "GSTP1", "GSTA1",
-        "NQO1", "HMOX1", "NFE2L2", "KEAP1", "SQSTM1",
-        "NOX1", "NOX2", "NOX4", "DUOX1", "DUOX2",
-        "MPO", "NOS2", "NOS3", "XDH",
-    ],
-    "Inflammatory Response": [
-        "IL1A", "IL1B", "IL1R1", "IL1R2", "IL1RN", "IL1RAP",
-        "IL6", "IL6R", "IL6ST", "IL10", "IL10RA", "IL10RB",
-        "IL18", "IL18R1", "IL33", "IL1RL1",
-        "TNF", "TNFRSF1A", "TNFRSF1B", "LTA", "LTB",
-        "CXCL1", "CXCL2", "CXCL3", "CXCL5", "CXCL8", "CXCL10", "CXCL11",
-        "CCL2", "CCL3", "CCL4", "CCL5", "CCL7", "CCL8", "CCL11", "CCL20",
-        "CXCR1", "CXCR2", "CCR1", "CCR2", "CCR5",
-        "PTGS2", "PTGES", "ALOX5", "LTA4H",
-        "TLR1", "TLR2", "TLR4", "TLR5", "TLR6", "TLR7", "TLR8", "TLR9",
-        "MYD88", "IRAK1", "IRAK4", "TRAF6",
-        "NLRP3", "PYCARD", "CASP1", "IL18",
-        "SELE", "SELP", "ICAM1", "VCAM1",
-        "C3", "C5", "C5AR1", "CFB", "CFD",
-    ],
+MSIGDB_URL = "https://www.gsea-msigdb.org/gsea/msigdb/human/download_geneset.jsp"
+
+# MSigDB identifiers mapped to display names
+HALLMARK_IDS = {
+    "Apoptosis": "HALLMARK_APOPTOSIS",
+    "TNF Signaling via NF-kB": "HALLMARK_TNFA_SIGNALING_VIA_NFKB",
+    "p53 Pathway": "HALLMARK_P53_PATHWAY",
+    "Reactive Oxygen Species": "HALLMARK_REACTIVE_OXYGEN_SPECIES_PATHWAY",
+    "Inflammatory Response": "HALLMARK_INFLAMMATORY_RESPONSE",
 }
+
+# Minimal fallback sets used only when MSigDB API is completely unreachable
+_FALLBACK_SETS = {
+    "Apoptosis": ["CASP3", "CASP8", "CASP9", "BAX", "BCL2", "FAS", "TNF", "TP53", "CYCS", "APAF1"],
+    "TNF Signaling via NF-kB": ["TNF", "NFKB1", "RELA", "TRAF2", "IKBKB", "IL6", "CXCL8", "CCL2"],
+    "p53 Pathway": ["TP53", "MDM2", "CDKN1A", "BAX", "BBC3", "GADD45A", "ATM", "CHEK2"],
+    "Reactive Oxygen Species": ["SOD1", "SOD2", "CAT", "GPX1", "PRDX1", "TXN", "NQO1", "HMOX1"],
+    "Inflammatory Response": ["IL1B", "IL6", "TNF", "CXCL8", "CCL2", "TLR4", "NLRP3", "PTGS2"],
+}
+
+# Module-level cache for fetched gene sets
+_gene_set_cache: dict[str, list[str]] = {}
+
+
+def fetch_geneset(name: str, msigdb_id: str) -> list[str]:
+    """Fetch a hallmark gene set from MSigDB API.
+
+    Returns gene symbols list. Falls back to minimal hardcoded list on failure.
+    """
+    if name in _gene_set_cache:
+        return _gene_set_cache[name]
+
+    try:
+        resp = requests.get(
+            MSIGDB_URL,
+            params={"geneSetName": msigdb_id, "fileType": "json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        genes = data.get(msigdb_id, {}).get("geneSymbols", [])
+        if genes:
+            _gene_set_cache[name] = genes
+            return genes
+    except Exception:
+        pass
+
+    # Fallback
+    fallback = _FALLBACK_SETS.get(name, [])
+    _gene_set_cache[name] = fallback
+    return fallback
+
+
+def get_hallmark_sets(pathways: list[str] | None = None) -> dict[str, list[str]]:
+    """Fetch all requested hallmark gene sets, returns {name: [genes]}.
+
+    Also returns a second value indicating which sets came from the live API.
+    """
+    selected = pathways if pathways else list(HALLMARK_IDS.keys())
+    result = {}
+    for name in selected:
+        if name in HALLMARK_IDS:
+            result[name] = fetch_geneset(name, HALLMARK_IDS[name])
+    return result
+
+
+def get_available_pathway_names() -> list[str]:
+    """Return the list of available pathway display names."""
+    return list(HALLMARK_IDS.keys())
+
+
+def is_live_data(name: str) -> bool:
+    """Check if a pathway's gene set came from the live API (not fallback)."""
+    if name not in _gene_set_cache:
+        return False
+    return len(_gene_set_cache[name]) > len(_FALLBACK_SETS.get(name, []))
 
 
 def compute_overlaps(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.DataFrame:
@@ -74,24 +92,21 @@ def compute_overlaps(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
 
+    hallmark_sets = get_hallmark_sets(pathways)
+    if not hallmark_sets:
+        return pd.DataFrame()
+
     deg_genes = set(df["Gene"].dropna().str.upper())
-    selected = pathways if pathways else list(HALLMARK_SETS.keys())
 
     rows = []
-    for pathway in selected:
-        if pathway not in HALLMARK_SETS:
-            continue
-        pathway_genes = set(g.upper() for g in HALLMARK_SETS[pathway])
+    for pathway, genes in hallmark_sets.items():
+        pathway_genes = set(g.upper() for g in genes)
         overlap = deg_genes & pathway_genes
         overlap_genes = sorted(overlap)
 
-        # Fisher's exact test
-        # 2x2 table: [in_pathway_and_deg, in_pathway_not_deg]
-        #             [not_pathway_and_deg, not_pathway_not_deg]
         a = len(overlap)
         b = len(pathway_genes - deg_genes)
         c = len(deg_genes - pathway_genes)
-        # Background ~20,000 human genes
         d = 20000 - a - b - c
         _, pvalue = stats.fisher_exact([[a, b], [c, d]], alternative="greater")
 
@@ -102,45 +117,41 @@ def compute_overlaps(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.
             "Overlap %": round(100 * a / len(pathway_genes), 1) if pathway_genes else 0,
             "Fisher p-value": pvalue,
             "Overlap Genes": ", ".join(overlap_genes[:20]),
+            "Source": "MSigDB API" if is_live_data(pathway) else "Fallback",
         })
 
     return pd.DataFrame(rows)
 
 
 def get_gene_pathway_matrix(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.DataFrame:
-    """Build a genes × pathways matrix for heatmap, with log2FC values."""
+    """Build a genes x pathways matrix for heatmap, with log2FC values."""
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
 
-    selected = pathways if pathways else list(HALLMARK_SETS.keys())
+    hallmark_sets = get_hallmark_sets(pathways)
+    if not hallmark_sets:
+        return pd.DataFrame()
+
     deg_genes = set(df["Gene"].dropna().str.upper())
 
-    # Find all genes that appear in any selected pathway
     all_pathway_genes = set()
-    for pw in selected:
-        if pw in HALLMARK_SETS:
-            all_pathway_genes.update(g.upper() for g in HALLMARK_SETS[pw])
+    for genes in hallmark_sets.values():
+        all_pathway_genes.update(g.upper() for g in genes)
 
-    # Genes in both DEG list and at least one pathway
     relevant_genes = sorted(deg_genes & all_pathway_genes)
-
     if not relevant_genes:
         return pd.DataFrame()
 
-    # Build matrix
     gene_fc = {}
     for _, row in df.iterrows():
         gene_fc[str(row["Gene"]).upper()] = row.get("log2FoldChange", 0)
 
     matrix_data = {}
-    for pw in selected:
-        if pw not in HALLMARK_SETS:
-            continue
-        pw_genes = set(g.upper() for g in HALLMARK_SETS[pw])
+    for pw, genes in hallmark_sets.items():
+        pw_genes = set(g.upper() for g in genes)
         matrix_data[pw] = [gene_fc.get(g, np.nan) if g in pw_genes else np.nan for g in relevant_genes]
 
     matrix = pd.DataFrame(matrix_data, index=relevant_genes)
-    # Keep only rows with at least one non-NaN
     matrix = matrix.dropna(how="all")
     return matrix
 
@@ -182,13 +193,12 @@ def create_overlap_bar_chart(overlap_df: pd.DataFrame) -> go.Figure:
 
 
 def create_heatmap(matrix: pd.DataFrame) -> go.Figure:
-    """Create heatmap of gene × pathway with log2FC coloring."""
+    """Create heatmap of gene x pathway with log2FC coloring."""
     if matrix.empty:
         fig = go.Figure()
         fig.update_layout(title="No data for heatmap")
         return fig
 
-    # Limit to top 50 genes for readability
     if len(matrix) > 50:
         matrix = matrix.head(50)
 
@@ -205,7 +215,7 @@ def create_heatmap(matrix: pd.DataFrame) -> go.Figure:
     )
 
     fig.update_layout(
-        title="Gene × Pathway Heatmap (log2 Fold Change)",
+        title="Gene x Pathway Heatmap (log2 Fold Change)",
         template="plotly_white",
         height=max(400, len(matrix) * 15),
         margin=dict(l=100),
@@ -219,15 +229,17 @@ def get_gene_table(df: pd.DataFrame, pathways: list[str] | None = None) -> pd.Da
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
 
-    selected = pathways if pathways else list(HALLMARK_SETS.keys())
-    rows = []
+    hallmark_sets = get_hallmark_sets(pathways)
+    if not hallmark_sets:
+        return pd.DataFrame()
 
+    # Pre-compute upper-case sets for each pathway
+    pw_upper = {pw: set(g.upper() for g in genes) for pw, genes in hallmark_sets.items()}
+
+    rows = []
     for _, row in df.iterrows():
         gene = str(row["Gene"]).upper()
-        memberships = []
-        for pw in selected:
-            if pw in HALLMARK_SETS and gene in set(g.upper() for g in HALLMARK_SETS[pw]):
-                memberships.append(pw)
+        memberships = [pw for pw, gene_set in pw_upper.items() if gene in gene_set]
 
         if memberships:
             rows.append({

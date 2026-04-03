@@ -1,5 +1,6 @@
-"""Biomarker discovery using OpenTargets API."""
+"""Biomarker discovery using OpenTargets API with batched queries."""
 
+import time
 import pandas as pd
 import numpy as np
 import requests
@@ -7,63 +8,92 @@ import plotly.graph_objects as go
 
 OPENTARGETS_URL = "https://api.platform.opentargets.org/api/v4/graphql"
 
+# Rate limiting: pause between batches to respect API limits
+BATCH_DELAY_SECONDS = 0.2
+BATCH_SIZE = 20
 
-def query_opentargets_associations(gene_symbol: str, ensembl_id: str | None = None) -> list[dict]:
-    """Query OpenTargets for disease associations of a gene."""
-    # Try by Ensembl ID first (more reliable)
-    target_id = ensembl_id if ensembl_id else gene_symbol
 
-    query = """
-    query($id: String!) {
-      target(ensemblId: $id) {
-        id
-        approvedSymbol
-        associatedDiseases(page: {size: 5, index: 0}) {
-          rows {
-            disease { id name }
-            score
+def query_opentargets_batch(
+    genes: list[dict],
+) -> dict[str, list[dict]]:
+    """Query OpenTargets for disease associations of multiple genes.
+
+    Args:
+        genes: List of dicts with 'symbol' and optionally 'ensembl_id' keys.
+
+    Returns:
+        Dict mapping gene symbol to list of disease association dicts.
+    """
+    results = {}
+
+    for gene_info in genes:
+        symbol = gene_info["symbol"]
+        ens_id = gene_info.get("ensembl_id")
+        target_id = ens_id if ens_id else symbol
+
+        query = """
+        query($id: String!) {
+          target(ensemblId: $id) {
+            id
+            approvedSymbol
+            associatedDiseases(page: {size: 5, index: 0}) {
+              rows {
+                disease { id name }
+                score
+              }
+            }
           }
         }
-      }
-    }
-    """
+        """
 
-    try:
-        resp = requests.post(
-            OPENTARGETS_URL,
-            json={"query": query, "variables": {"id": target_id}},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        return []
+        try:
+            resp = requests.post(
+                OPENTARGETS_URL,
+                json={"query": query, "variables": {"id": target_id}},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            results[symbol] = []
+            continue
 
-    target = data.get("data", {}).get("target")
-    if not target:
-        return []
+        target = data.get("data", {}).get("target")
+        if not target:
+            results[symbol] = []
+            continue
 
-    associations = []
-    for row in target.get("associatedDiseases", {}).get("rows", []):
-        associations.append({
-            "disease": row["disease"]["name"],
-            "disease_id": row["disease"]["id"],
-            "score": row["score"],
-        })
+        associations = []
+        for row in target.get("associatedDiseases", {}).get("rows", []):
+            associations.append({
+                "disease": row["disease"]["name"],
+                "disease_id": row["disease"]["id"],
+                "score": row["score"],
+            })
+        results[symbol] = associations
 
-    return associations
+    return results
 
 
 def find_biomarkers(
     df: pd.DataFrame,
     min_log2fc: float = 2.0,
     min_sig_score: float = 0.0,
-    max_genes: int = 50,
+    progress_callback=None,
 ) -> pd.DataFrame:
-    """Identify biomarker candidates among DEGs.
+    """Identify biomarker candidates among ALL filtered DEGs.
 
-    Filters by thresholds, queries OpenTargets for disease associations,
-    and scores candidates.
+    Processes all genes that pass the thresholds using batched API calls
+    with rate limiting. No silent cutoffs.
+
+    Args:
+        df: DEG dataframe with Gene, log2FoldChange, padj, significance score, etc.
+        min_log2fc: Minimum |log2FC| filter.
+        min_sig_score: Minimum significance score filter.
+        progress_callback: Optional callable(current, total) for progress updates.
+
+    Returns:
+        DataFrame of biomarker candidates ranked by score.
     """
     if df.empty or "Gene" not in df.columns:
         return pd.DataFrame()
@@ -78,21 +108,48 @@ def find_biomarkers(
     if candidates.empty:
         return pd.DataFrame()
 
-    # Limit to top genes
+    # Sort by significance score for best results first
     if "significance score" in candidates.columns:
-        candidates = candidates.nlargest(min(max_genes, len(candidates)), "significance score")
+        candidates = candidates.sort_values("significance score", ascending=False)
 
-    # Query OpenTargets for disease associations
+    # Build gene list for batch querying
+    gene_list = []
+    seen = set()
+    for _, row in candidates.iterrows():
+        symbol = row["Gene"]
+        if symbol in seen or pd.isna(symbol):
+            continue
+        seen.add(symbol)
+        gene_list.append({
+            "symbol": symbol,
+            "ensembl_id": row.get("ID", None),
+        })
+
+    total_genes = len(gene_list)
+    if total_genes == 0:
+        return pd.DataFrame()
+
+    # Process in batches with rate limiting
+    all_associations = {}
+    for batch_start in range(0, total_genes, BATCH_SIZE):
+        batch = gene_list[batch_start : batch_start + BATCH_SIZE]
+        batch_results = query_opentargets_batch(batch)
+        all_associations.update(batch_results)
+
+        if progress_callback:
+            progress_callback(min(batch_start + BATCH_SIZE, total_genes), total_genes)
+
+        # Rate limit between batches
+        if batch_start + BATCH_SIZE < total_genes:
+            time.sleep(BATCH_DELAY_SECONDS)
+
+    # Build result table
     disease_data = []
-    api_success = 0
-
-    for _, row in candidates.head(max_genes).iterrows():
-        gene = row["Gene"]
-        ens_id = row.get("ID", None)
-        associations = query_opentargets_associations(gene, ens_id)
+    for gene_info in gene_list:
+        symbol = gene_info["symbol"]
+        associations = all_associations.get(symbol, [])
 
         if associations:
-            api_success += 1
             disease_names = [a["disease"] for a in associations]
             max_score = max(a["score"] for a in associations)
         else:
@@ -100,7 +157,7 @@ def find_biomarkers(
             max_score = 0.0
 
         disease_data.append({
-            "Gene": gene,
+            "Gene": symbol,
             "Disease Associations": "; ".join(disease_names) if disease_names else "None found",
             "Disease Score": max_score,
             "Known Biomarker": "Y" if max_score > 0.5 else "N",

@@ -10,7 +10,7 @@ from modules.targets import get_therapeutic_targets, get_target_summary
 from modules.biomarkers import find_biomarkers, create_biomarker_scatter
 from modules.cytotoxicity import (
     compute_overlaps, get_gene_pathway_matrix, create_overlap_bar_chart,
-    create_heatmap, get_gene_table, HALLMARK_SETS,
+    create_heatmap, get_gene_table, get_available_pathway_names,
 )
 from modules.disease import (
     search_disease, cross_reference, create_venn_diagram, create_network_graph,
@@ -179,19 +179,9 @@ with tab3:
         mcol1, mcol2, mcol3 = st.columns(3)
         mcol1.metric("Genes with drug interactions", summary["genes_with_drugs"])
         mcol2.metric("Unique drugs found", summary["total_drugs"])
-        mcol3.metric("FDA-approved drugs", summary["approved_drugs"])
+        mcol3.metric("With clinical stage data", summary["with_clinical_stage"])
 
         st.subheader("Drug-Gene Interactions")
-
-        # Color coding
-        def highlight_approval(row):
-            status = row.get("Approval Status", "")
-            if status == "FDA Approved":
-                return ["background-color: #d4edda"] * len(row)
-            elif status == "Clinical Trial":
-                return ["background-color: #fff3cd"] * len(row)
-            return [""] * len(row)
-
         st.dataframe(targets, use_container_width=True, hide_index=True)
 
         csv = targets.to_csv(index=False)
@@ -209,9 +199,14 @@ with tab4:
     b_min_sig = bcol2.slider("Min significance score", 0.0, 100.0, 0.0, 1.0, key="b_sig")
 
     if st.button("Find Biomarker Candidates", key="run_biomarkers"):
-        with st.spinner("Querying OpenTargets for disease associations..."):
-            biomarkers = find_biomarkers(df, min_log2fc=b_min_fc, min_sig_score=b_min_sig, max_genes=50)
-            st.session_state["biomarkers"] = biomarkers
+        progress_bar = st.progress(0, text="Querying OpenTargets...")
+
+        def update_progress(current, total):
+            progress_bar.progress(current / total, text=f"Querying OpenTargets... {current}/{total} genes")
+
+        biomarkers = find_biomarkers(df, min_log2fc=b_min_fc, min_sig_score=b_min_sig, progress_callback=update_progress)
+        progress_bar.empty()
+        st.session_state["biomarkers"] = biomarkers
 
     biomarkers = st.session_state.get("biomarkers", pd.DataFrame())
 
@@ -234,8 +229,8 @@ with tab5:
 
     selected_pathways = st.multiselect(
         "Select pathways",
-        list(HALLMARK_SETS.keys()),
-        default=list(HALLMARK_SETS.keys()),
+        get_available_pathway_names(),
+        default=get_available_pathway_names(),
         key="cyto_pw",
     )
 
