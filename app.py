@@ -88,9 +88,11 @@ padj_thresh = st.sidebar.slider("padj threshold", 0.001, 0.1, 0.05, 0.001, forma
 log2fc_thresh = st.sidebar.slider("|log2FC| threshold", 0.0, 5.0, 1.0, 0.1)
 gene_types = sorted(df_raw["Gene Type"].dropna().unique()) if "Gene Type" in df_raw.columns else []
 selected_types = st.sidebar.multiselect("Gene types", gene_types, default=gene_types)
+# Treat empty selection as "all types selected"
+effective_types = selected_types if selected_types else gene_types
 selected_direction = st.sidebar.selectbox("Direction", ["All", "Upregulated", "Downregulated"])
 
-df = filter_degs(df_raw, padj_thresh, log2fc_thresh, selected_types or None, selected_direction)
+df = filter_degs(df_raw, padj_thresh, log2fc_thresh, effective_types if effective_types else None, selected_direction)
 
 # Data summary
 st.sidebar.markdown("---")

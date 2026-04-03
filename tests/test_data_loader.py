@@ -187,6 +187,13 @@ class TestFilterDegs:
         assert isinstance(filtered, pd.DataFrame)
         assert len(filtered) == 0
 
+    def test_empty_list_gene_types_returns_all(self):
+        """Passing gene_types=[] should return all genes, same as None."""
+        df = generate_demo_data()
+        all_genes = filter_degs(df, padj_threshold=1.0, log2fc_threshold=0, gene_types=None)
+        empty_list = filter_degs(df, padj_threshold=1.0, log2fc_threshold=0, gene_types=[])
+        assert len(empty_list) == len(all_genes)
+
     def test_empty_input(self):
         df = pd.DataFrame(columns=["Gene", "padj", "log2FoldChange", "Direction", "Gene Type"])
         filtered = filter_degs(df)

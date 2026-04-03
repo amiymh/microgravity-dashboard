@@ -187,7 +187,7 @@ def filter_degs(
     if "log2FoldChange" in filtered.columns:
         filtered = filtered[filtered["log2FoldChange"].abs() >= log2fc_threshold]
 
-    if gene_types and "Gene Type" in filtered.columns:
+    if gene_types is not None and len(gene_types) > 0 and "Gene Type" in filtered.columns:
         filtered = filtered[filtered["Gene Type"].isin(gene_types)]
 
     if direction != "All" and "Direction" in filtered.columns:
