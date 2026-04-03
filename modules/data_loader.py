@@ -95,6 +95,29 @@ def _has_extension(source) -> bool:
     return name.endswith(".csv") or name.endswith(".xlsx") or name.endswith(".xls")
 
 
+def _load_gene_types_from_sdegs(source, current_sheet: str) -> pd.DataFrame | None:
+    """Try to load Gene Type mapping from SDEGs sheet.
+
+    Used when the current sheet is missing the Gene Type column.
+    Returns a DataFrame with Gene and Gene Type columns, or None.
+    """
+    if current_sheet == "SDEGs":
+        return None  # Already on SDEGs, no fallback
+    if _is_csv(source):
+        return None  # CSV has no sheets
+
+    try:
+        sdegs = pd.read_excel(source, sheet_name="SDEGs", engine="openpyxl")
+        if "Gene Type" in sdegs.columns and "Gene" in sdegs.columns:
+            return sdegs[["Gene", "Gene Type"]].drop_duplicates(subset=["Gene"])
+        if "Type" in sdegs.columns and "Gene" in sdegs.columns:
+            mapping = sdegs[["Gene", "Type"]].drop_duplicates(subset=["Gene"])
+            return mapping.rename(columns={"Type": "Gene Type"})
+    except Exception:
+        pass
+    return None
+
+
 def load_excel(
     file_path: str | None = None,
     sheet_name: str = "SDEGs",
@@ -133,13 +156,20 @@ def load_excel(
     except Exception:
         return generate_demo_data()
 
+    # Handle the secondary sheet which uses 'Type' instead of 'Gene Type'
+    # Must rename before KEEP_COLS filter since 'Type' is not in KEEP_COLS
+    if "Type" in df.columns and "Gene Type" not in df.columns:
+        df = df.rename(columns={"Type": "Gene Type"})
+
     # Clean: keep only meaningful columns that exist
     cols_to_keep = [c for c in KEEP_COLS if c in df.columns]
     df = df[cols_to_keep].copy()
 
-    # Handle the secondary sheet which uses 'Type' instead of 'Gene Type'
-    if "Type" in df.columns and "Gene Type" not in df.columns:
-        df = df.rename(columns={"Type": "Gene Type"})
+    # Auto-fill Gene Type from SDEGs sheet if missing
+    if "Gene Type" not in df.columns and "Gene" in df.columns:
+        gene_type_df = _load_gene_types_from_sdegs(source, sheet_name)
+        if gene_type_df is not None:
+            df = df.merge(gene_type_df, on="Gene", how="left")
 
     # Drop rows where Gene is null
     df = df.dropna(subset=["Gene"])

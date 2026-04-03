@@ -44,6 +44,46 @@ class TestFilterDegs:
         assert len(filtered) != 16, "Got exactly 16 — likely returning samples instead of genes"
 
 
+class TestGeneTypeAutoFill:
+    def test_significance_sheet_has_gene_type(self):
+        """SIGNIFICANCE SCOREs sheet has Type column, renamed to Gene Type."""
+        from tests.conftest import DATA_FILE
+        if DATA_FILE is None:
+            pytest.skip("Data file not available")
+        from modules.data_loader import load_excel
+        df = load_excel(DATA_FILE, sheet_name="SIGNFICANCE SCOREs Gene Types")
+        assert "Gene Type" in df.columns, "Type should be renamed to Gene Type"
+        assert df["Gene Type"].notna().sum() > 14000, "All genes should have Gene Type"
+
+    def test_normalized_degs_auto_fills_gene_type(self):
+        """Normalized DEGs sheet has no Type/Gene Type — should auto-fill from SDEGs."""
+        from tests.conftest import DATA_FILE
+        if DATA_FILE is None:
+            pytest.skip("Data file not available")
+        from modules.data_loader import load_excel
+        df = load_excel(DATA_FILE, sheet_name="Normalized DEGs")
+        assert "Gene Type" in df.columns, "Gene Type should be auto-filled from SDEGs"
+        assert df["Gene Type"].notna().any(), "Some genes should have Gene Type values"
+
+    def test_missing_gene_type_graceful(self, tmp_path):
+        """When no Gene Type column exists anywhere, filter should be disabled."""
+        import pandas as pd
+        from modules.data_loader import load_excel
+        csv = tmp_path / "no_genetype.csv"
+        pd.DataFrame({
+            "Gene": ["A", "B"], "padj": [0.01, 0.02],
+            "log2FoldChange": [1.5, -2.0],
+        }).to_csv(csv, index=False)
+        df = load_excel(str(csv))
+        assert "Gene Type" not in df.columns  # no auto-fill possible for CSV
+
+    def test_padj_default_filter_range(self, real_df):
+        """Default padj=0.05 on SDEGs returns 3000-4522 genes."""
+        from modules.data_loader import filter_degs
+        filtered = filter_degs(real_df, padj_threshold=0.05, log2fc_threshold=1.0)
+        assert 3000 <= len(filtered) <= 4522
+
+
 class TestTargets:
     def test_includes_both_directions(self, real_df_filtered):
         from modules.targets import get_therapeutic_targets

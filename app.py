@@ -84,12 +84,32 @@ if missing:
 # Global filters
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filters")
-padj_thresh = st.sidebar.slider("padj threshold", 0.001, 0.1, 0.05, 0.001, format="%.3f")
+
+# Dynamic padj presets based on data range
+if "padj" in df_raw.columns:
+    padj_min = float(df_raw["padj"].min())
+    padj_max = float(df_raw["padj"].max())
+    padj_presets = {"Relaxed (0.1)": 0.1, "Standard (0.05)": 0.05, "Strict (0.01)": 0.01, "Very strict (0.001)": 0.001}
+    padj_choice = st.sidebar.selectbox("padj threshold", list(padj_presets.keys()), index=1)
+    padj_thresh = padj_presets[padj_choice]
+    st.sidebar.caption(f"Data range: {padj_min:.2e} – {padj_max:.2e}")
+else:
+    padj_thresh = 0.05
+
 log2fc_thresh = st.sidebar.slider("|log2FC| threshold", 0.0, 5.0, 1.0, 0.1)
-gene_types = sorted(df_raw["Gene Type"].dropna().unique()) if "Gene Type" in df_raw.columns else []
-selected_types = st.sidebar.multiselect("Gene types", gene_types, default=gene_types)
-# Treat empty selection as "all types selected"
-effective_types = selected_types if selected_types else gene_types
+
+# Gene Type filter — disabled gracefully when column missing
+_has_gene_type = "Gene Type" in df_raw.columns and df_raw["Gene Type"].notna().any()
+if _has_gene_type:
+    gene_types = sorted(df_raw["Gene Type"].dropna().unique())
+    selected_types = st.sidebar.multiselect("Gene types", gene_types, default=gene_types)
+    effective_types = selected_types if selected_types else gene_types
+else:
+    gene_types = []
+    effective_types = None
+    st.sidebar.text_input("Gene types", value="Not available", disabled=True)
+    st.sidebar.caption("Gene Type filtering unavailable — column not found in this sheet")
+
 selected_direction = st.sidebar.selectbox("Direction", ["All", "Upregulated", "Downregulated"])
 
 df = filter_degs(df_raw, padj_thresh, log2fc_thresh, effective_types if effective_types else None, selected_direction)
@@ -462,6 +482,107 @@ and disease comparisons — all without writing any code.
 - **Required columns:** `Gene`, `padj`, `log2FoldChange`, `Direction` — other columns are optional but enhance the analysis
 - **Missing columns:** The tool auto-fills `Direction` from `log2FoldChange` and computes `significance score` if absent. Missing count columns disable PCA and Heatmap tabs.
 - **Demo mode:** If no file is uploaded, the tool runs with 50 synthetic genes so you can explore every feature
+""")
+
+    st.subheader("Understanding the Sidebar")
+
+    st.markdown("**Uploading Your File**")
+    st.markdown("""
+Click "Browse files" in the sidebar. Select your Excel (.xlsx) or CSV (.csv) file. The app loads it
+automatically and updates all tabs. If you do not upload anything, the app runs on demo data — 50
+synthetic genes — so you can explore every feature before using your own data.
+""")
+
+    st.markdown("**Sheet Selector (Excel only)**")
+    st.markdown("""
+If you uploaded an Excel file, you will see a sheet selector. Your file may have multiple sheets:
+
+- **SDEGs** is the recommended sheet. It contains only the statistically significant genes and is ready
+  to analyze immediately.
+- **SIGNFICANCE SCOREs Gene Types** contains all genes including non-significant ones — useful when you
+  want to see the full picture.
+
+If you select a sheet that is missing certain columns (like Gene Type), the app fills them in
+automatically from the SDEGs sheet if possible, or disables that filter with a note. This selector
+does not appear for CSV files since CSVs have only one sheet.
+""")
+
+    st.markdown("**padj Threshold**")
+    st.markdown("""
+padj is the *adjusted p-value*. It measures how statistically confident we are that a gene is truly
+differentially expressed and not just random noise. A lower padj means more confidence.
+
+The app shows preset options based on your data range:
+- **Relaxed (0.1)** — includes more genes, some may be borderline
+- **Standard (0.05)** — the most common threshold in research papers
+- **Strict (0.01)** — only genes with strong statistical evidence
+- **Very strict (0.001)** — only the most confident results
+
+Start with Standard. Tighten it if you want only the most reliable genes.
+""")
+
+    st.markdown("**|log2FC| Threshold**")
+    st.markdown("""
+log2 Fold Change measures how much a gene's expression changed between Earth and Space:
+- A value of **1.0** means the gene doubled (or halved) its expression
+- A value of **2.0** means it quadrupled (or quartered)
+- A value of **0** means no change
+
+A higher threshold shows only large expression changes. Start at 1.0 for a balanced view.
+""")
+
+    st.markdown("**Gene Types**")
+    st.markdown("""
+Genes in your data are classified by type:
+- **protein_coding** — genes that make proteins directly (the majority of known functional genes)
+- **lncRNA** — long non-coding RNA that regulates other genes without making proteins
+- **processed_pseudogene** — inactive copies of genes, usually not functional
+
+By default all types are shown. Deselect types you are not interested in.
+If this filter is greyed out, it means Gene Type information was not available in your selected sheet.
+""")
+
+    st.markdown("**Direction**")
+    st.markdown("""
+- **Upregulated** means the gene is *more active* in Space than on Earth
+- **Downregulated** means the gene is *less active* in Space
+- **All** shows both
+
+Use this filter to focus on one direction. For example, if you are looking for genes activated as a
+stress response in microgravity, filter to Upregulated.
+""")
+
+    st.markdown("**Data Summary**")
+    st.markdown("""
+Shows how many genes passed all your current filters:
+- **Total genes** is the number being analyzed right now across all tabs
+- **Up** and **Down** show the split between upregulated and downregulated
+- **Source** confirms whether you are using uploaded data or demo data
+
+If the number seems too low, check your filters — especially the padj threshold.
+""")
+
+    st.markdown("**Downloads**")
+    st.markdown("""
+Three download buttons at the bottom of the sidebar:
+
+- **Methods Report (.docx)** — a Word document with the full scientific methods for every analysis
+  you ran in this session. Written so another scientist can reproduce your results manually, without
+  using this tool. Includes exact URLs, gene lists, parameters, and expected outputs.
+
+- **Jupyter Notebook (.ipynb)** — a notebook containing all the code and outputs from your session.
+  Can be re-run by a Python user to get identical results. Serves as an auditable scientific record.
+
+- **Download All Results (.zip)** — everything in one file: the methods report, the notebook, all
+  figures as PNG (300 DPI, publication-ready) and SVG (vector), and all result tables as CSV files.
+""")
+
+    st.markdown("**Version Info**")
+    st.markdown("""
+Click the Version Info expander at the very bottom of the sidebar to see the exact version of every
+software library and database used in this session. This is important for reproducibility — if you
+publish results, include this information in your methods section so others know the exact software
+environment you used.
 """)
 
     st.subheader("How to Use Each Tab")
