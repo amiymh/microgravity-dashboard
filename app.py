@@ -59,17 +59,17 @@ _is_csv = uploaded_file is not None and uploaded_file.name.lower().endswith(".cs
 if _is_csv:
     selected_sheet = "SDEGs"
 else:
-    selected_sheet = st.sidebar.selectbox("Sheet", ["SDEGs", "SIGNFICANCE SCOREs Gene Types"], index=0)
+    selected_sheet = st.sidebar.selectbox("Sheet", ["SDEGs", "SIGNFICANCE SCOREs Gene Types", "Normalized DEGs"], index=0)
 
 # Load data
 @st.cache_data
-def cached_load(sheet_name, _file=None):
-    if _file is not None:
-        return load_excel(uploaded_file=_file, sheet_name=sheet_name)
+def cached_load(sheet_name, file_name=None, file_size=None, uploaded_file=None):
+    if uploaded_file is not None:
+        return load_excel(uploaded_file=uploaded_file, sheet_name=sheet_name)
     return load_excel(sheet_name=sheet_name)
 
 if uploaded_file:
-    df_raw = cached_load(selected_sheet, uploaded_file)
+    df_raw = cached_load(selected_sheet, file_name=uploaded_file.name, file_size=uploaded_file.size, uploaded_file=uploaded_file)
     data_source = f"Uploaded {'CSV' if _is_csv else 'Excel'}"
     data_filename = uploaded_file.name
 else:
@@ -155,6 +155,7 @@ df = filter_degs(df_raw, padj_thresh, log2fc_thresh, effective_types if effectiv
 # Data summary
 st.sidebar.markdown("---")
 st.sidebar.subheader("Data Summary")
+st.sidebar.metric("Total genes in file", f"{len(df_raw):,}")
 st.sidebar.metric("Total genes (filtered)", len(df))
 if "Direction" in df.columns:
     c1, c2 = st.sidebar.columns(2)
