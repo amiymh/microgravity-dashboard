@@ -19,6 +19,11 @@ from modules.disease import (
     search_disease, cross_reference, create_venn_diagram, create_network_graph,
     get_analysis_log as disease_log,
 )
+from modules.organ_toxicity import (
+    compute_organ_overlaps, get_organ_gene_table, create_organ_bar_chart,
+    create_organ_heatmap, get_available_organs,
+    get_analysis_log as organ_tox_log,
+)
 from modules.fig_export import add_download_buttons, fig_to_png
 from modules.versions import get_session_versions, get_api_versions, format_versions_text
 from modules.report import generate_report
@@ -61,19 +66,26 @@ if _is_csv:
 else:
     selected_sheet = st.sidebar.selectbox("Sheet", ["SDEGs", "SIGNFICANCE SCOREs Gene Types", "Normalized DEGs"], index=0)
 
-# Load data
-@st.cache_data
-def cached_load(sheet_name, file_name=None, file_size=None, uploaded_file=None):
-    if uploaded_file is not None:
-        return load_excel(uploaded_file=uploaded_file, sheet_name=sheet_name)
-    return load_excel(sheet_name=sheet_name)
+# Load data — use session_state to cache, keyed by file identity + sheet
+if "_loaded_key" not in st.session_state:
+    st.session_state["_loaded_key"] = None
+    st.session_state["_loaded_df"] = None
 
 if uploaded_file:
-    df_raw = cached_load(selected_sheet, file_name=uploaded_file.name, file_size=uploaded_file.size, uploaded_file=uploaded_file)
+    _cache_key = (uploaded_file.name, uploaded_file.size, selected_sheet)
+    if st.session_state["_loaded_key"] != _cache_key:
+        uploaded_file.seek(0)
+        st.session_state["_loaded_df"] = load_excel(uploaded_file=uploaded_file, sheet_name=selected_sheet)
+        st.session_state["_loaded_key"] = _cache_key
+    df_raw = st.session_state["_loaded_df"]
     data_source = f"Uploaded {'CSV' if _is_csv else 'Excel'}"
     data_filename = uploaded_file.name
 else:
-    df_raw = cached_load(selected_sheet)
+    _cache_key = ("demo", 0, selected_sheet)
+    if st.session_state["_loaded_key"] != _cache_key:
+        st.session_state["_loaded_df"] = load_excel(sheet_name=selected_sheet)
+        st.session_state["_loaded_key"] = _cache_key
+    df_raw = st.session_state["_loaded_df"]
     data_filename = "demo_data" if len(df_raw) == 50 else "local_file"
     data_source = "Demo data" if len(df_raw) == 50 else "Local file"
 
@@ -196,10 +208,10 @@ with st.sidebar.expander("Version Info"):
 
 # ── Main Tabs ────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🌋 Volcano", "📊 PCA", "🔥 Heatmap",
     "🧪 Pathways", "💊 Targets", "🔬 Biomarkers",
-    "☠️ Cytotoxicity", "🏥 Disease", "📖 Manual",
+    "☠️ Cytotoxicity", "🧫 Organ Tox", "🏥 Disease", "📖 Manual",
 ])
 
 # ── Tab 1: Volcano ──────────────────────────────────────────────────────────
@@ -447,9 +459,54 @@ with tab7:
     else:
         st.info("Select at least one pathway.")
 
-# ── Tab 8: Disease Cross-Reference ──────────────────────────────────────────
+# ── Tab 8: Organ Toxicity ───────────────────────────────────────────────────
 
 with tab8:
+    st.header("Organ Toxicity Signatures")
+    st.caption("Cross-reference your DEGs against curated organ-specific toxicity gene sets.")
+    sel_organs = st.multiselect("Select organs", get_available_organs(),
+                                default=get_available_organs(), key="organ_sel")
+    if sel_organs:
+        organ_overlaps = compute_organ_overlaps(df, sel_organs)
+        if not organ_overlaps.empty:
+            st.dataframe(organ_overlaps, use_container_width=True, hide_index=True)
+            ofig = create_organ_bar_chart(organ_overlaps)
+            st.plotly_chart(ofig, use_container_width=True)
+            add_download_buttons(st, ofig, "organ_toxicity_bar")
+            _png = fig_to_png(ofig)
+            if _png:
+                st.session_state["figures"]["organ_toxicity_bar.png"] = _png
+
+            oheatmap = create_organ_heatmap(df, sel_organs)
+            if oheatmap.data and hasattr(oheatmap.data[0], 'z') and oheatmap.data[0].z is not None:
+                st.subheader("Gene × Organ Heatmap")
+                st.plotly_chart(oheatmap, use_container_width=True)
+                add_download_buttons(st, oheatmap, "organ_toxicity_heatmap")
+                _png = fig_to_png(oheatmap)
+                if _png:
+                    st.session_state["figures"]["organ_toxicity_heatmap.png"] = _png
+
+            organ_gene_tbl = get_organ_gene_table(df, sel_organs)
+            if not organ_gene_tbl.empty:
+                st.subheader("Genes with Organ Toxicity Associations")
+                st.dataframe(organ_gene_tbl, use_container_width=True, hide_index=True)
+                csv = organ_gene_tbl.to_csv(index=False)
+                st.download_button("Download organ toxicity genes (CSV)", csv, "organ_toxicity_genes.csv", "text/csv")
+                st.session_state["data_csvs"]["organ_toxicity_genes.csv"] = csv.encode()
+
+            log = organ_tox_log(organ_overlaps, sel_organs)
+            st.session_state["analysis_logs"]["Organ Toxicity"] = log
+            with st.expander("🔍 Analysis Details — click to verify"):
+                for line in log:
+                    st.markdown(f"- {line}")
+        else:
+            st.info("No overlapping genes found.")
+    else:
+        st.info("Select at least one organ.")
+
+# ── Tab 9: Disease Cross-Reference ──────────────────────────────────────────
+
+with tab9:
     st.header("Disease Cross-Reference")
     disease_query = st.text_input("Search for a disease", placeholder="e.g. Alzheimer, breast cancer")
     d_score = st.slider("Association score threshold", 0.0, 1.0, 0.3, 0.05, key="d_score")
@@ -502,9 +559,9 @@ with tab8:
         else:
             st.warning("No diseases found. Try a different term.")
 
-# ── Tab 9: User Manual ──────────────────────────────────────────────────────
+# ── Tab 10: User Manual ─────────────────────────────────────────────────────
 
-with tab9:
+with tab10:
     st.header("📖 User Manual")
 
     st.subheader("What This Tool Does")
@@ -628,6 +685,7 @@ environment you used.
     st.markdown("**💊 Therapeutic Targets** — Finds which DEGs are known drug targets using DGIdb and OpenTargets databases.")
     st.markdown("**🔬 Biomarker Discovery** — Identifies potential disease biomarkers by querying OpenTargets for disease associations of your DEGs.")
     st.markdown("**☠️ Cytotoxicity & Apoptosis** — Checks overlap between your DEGs and known cell death/inflammation gene sets from MSigDB.")
+    st.markdown("**🧫 Organ Toxicity** — Cross-references your DEGs against curated organ-specific toxicity gene signatures (liver, kidney, heart, lung, brain, bone marrow, GI, muscle). Uses Fisher's exact test to identify which organ toxicity profiles are enriched in your data.")
     st.markdown("**🏥 Disease Cross-Reference** — Search any disease and find which of your DEGs are associated with it.")
 
     st.subheader("Understanding the Black Box — Transparency and Reproducibility")
