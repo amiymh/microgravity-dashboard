@@ -225,7 +225,7 @@ with tab1:
     v_color = st.selectbox("Color scheme", ["Default", "Warm", "Cool"], key="v_color")
 
     fig = create_volcano_plot(df_raw, v_padj, v_fc, v_n, v_color)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     add_download_buttons(st, fig, "volcano_plot")
     _png = fig_to_png(fig)
     if _png:
@@ -234,7 +234,7 @@ with tab1:
     top20 = get_top_significant(df_raw, 20)
     if not top20.empty:
         st.subheader("Top 20 Most Significant Genes")
-        st.dataframe(top20, use_container_width=True, hide_index=True)
+        st.dataframe(top20, width="stretch", hide_index=True)
     csv = df.to_csv(index=False)
     st.download_button("Download filtered gene list (CSV)", csv, "filtered_genes.csv", "text/csv")
     st.session_state["data_csvs"]["filtered_genes.csv"] = csv.encode()
@@ -253,7 +253,7 @@ with tab2:
 
     if pca_result:
         fig = create_pca_plot(pca_result)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         add_download_buttons(st, fig, "pca_plot")
         _png = fig_to_png(fig)
         if _png:
@@ -262,7 +262,7 @@ with tab2:
         st.subheader("Top Gene Loadings (PC1 & PC2)")
         loadings_df = get_loadings(df_raw, pca_result["pca_model"])
         if loadings_df is not None and not loadings_df.empty:
-            st.dataframe(loadings_df, use_container_width=True, hide_index=True)
+            st.dataframe(loadings_df, width="stretch", hide_index=True)
 
         log = pca_log(pca_result)
         st.session_state["analysis_logs"]["PCA Plot"] = log
@@ -283,7 +283,7 @@ with tab3:
     hm_data = compute_heatmap_data(df, top_n=h_top_n, cluster=h_cluster)
     if hm_data:
         fig = create_heatmap_figure(hm_data)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         add_download_buttons(st, fig, "heatmap")
         _png = fig_to_png(fig)
         if _png:
@@ -291,7 +291,7 @@ with tab3:
 
         if "gene_info" in hm_data and not hm_data["gene_info"].empty:
             st.subheader("Gene Table")
-            st.dataframe(hm_data["gene_info"], use_container_width=True, hide_index=True)
+            st.dataframe(hm_data["gene_info"], width="stretch", hide_index=True)
             csv = hm_data["gene_info"].to_csv(index=False)
             st.download_button("Download gene table (CSV)", csv, "heatmap_genes.csv", "text/csv")
 
@@ -327,12 +327,12 @@ with tab4:
                 st.warning("Enrichr API unavailable — showing demo results.")
             if not results.empty:
                 fig = create_pathway_chart(results, p_top)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 add_download_buttons(st, fig, "pathways")
                 _png = fig_to_png(fig)
                 if _png:
                     st.session_state["figures"]["pathways.png"] = _png
-                st.dataframe(results, use_container_width=True, hide_index=True)
+                st.dataframe(results, width="stretch", hide_index=True)
                 csv = results.to_csv(index=False)
                 st.download_button("Download pathway results (CSV)", csv, "pathways.csv", "text/csv")
                 st.session_state["data_csvs"]["pathway_results.csv"] = csv.encode()
@@ -363,7 +363,7 @@ with tab5:
         mc1.metric("Genes with drugs", summary["genes_with_drugs"])
         mc2.metric("Unique drugs", summary["total_drugs"])
         mc3.metric("With clinical stage", summary["with_clinical_stage"])
-        st.dataframe(targets, use_container_width=True, hide_index=True)
+        st.dataframe(targets, width="stretch", hide_index=True)
         csv = targets.to_csv(index=False)
         st.download_button("Download targets (CSV)", csv, "therapeutic_targets.csv", "text/csv")
         st.session_state["data_csvs"]["therapeutic_targets.csv"] = csv.encode()
@@ -395,9 +395,9 @@ with tab6:
 
     biomarkers = st.session_state.get("biomarkers", pd.DataFrame())
     if not biomarkers.empty:
-        st.dataframe(biomarkers, use_container_width=True, hide_index=True)
+        st.dataframe(biomarkers, width="stretch", hide_index=True)
         fig = create_biomarker_scatter(biomarkers)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         add_download_buttons(st, fig, "biomarkers")
         _png = fig_to_png(fig)
         if _png:
@@ -423,9 +423,9 @@ with tab7:
     if sel_pw:
         overlaps = compute_overlaps(df, sel_pw)
         if not overlaps.empty:
-            st.dataframe(overlaps, use_container_width=True, hide_index=True)
+            st.dataframe(overlaps, width="stretch", hide_index=True)
             fig = create_overlap_bar_chart(overlaps)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             add_download_buttons(st, fig, "cytotoxicity_bar")
             _png = fig_to_png(fig)
             if _png:
@@ -435,7 +435,7 @@ with tab7:
             if not matrix.empty:
                 st.subheader("Gene × Pathway Heatmap")
                 hfig = create_heatmap(matrix)
-                st.plotly_chart(hfig, use_container_width=True)
+                st.plotly_chart(hfig, width="stretch")
                 add_download_buttons(st, hfig, "cytotoxicity_heatmap")
                 _png = fig_to_png(hfig)
                 if _png:
@@ -444,7 +444,7 @@ with tab7:
             gene_tbl = get_gene_table(df, sel_pw)
             if not gene_tbl.empty:
                 st.subheader("Genes in Pathways")
-                st.dataframe(gene_tbl, use_container_width=True, hide_index=True)
+                st.dataframe(gene_tbl, width="stretch", hide_index=True)
                 csv = gene_tbl.to_csv(index=False)
                 st.download_button("Download gene table (CSV)", csv, "cytotoxicity_genes.csv", "text/csv")
                 st.session_state["data_csvs"]["cytotoxicity_genes.csv"] = csv.encode()
@@ -469,9 +469,9 @@ with tab8:
     if sel_organs:
         organ_overlaps = compute_organ_overlaps(df, sel_organs)
         if not organ_overlaps.empty:
-            st.dataframe(organ_overlaps, use_container_width=True, hide_index=True)
+            st.dataframe(organ_overlaps, width="stretch", hide_index=True)
             ofig = create_organ_bar_chart(organ_overlaps)
-            st.plotly_chart(ofig, use_container_width=True)
+            st.plotly_chart(ofig, width="stretch")
             add_download_buttons(st, ofig, "organ_toxicity_bar")
             _png = fig_to_png(ofig)
             if _png:
@@ -480,7 +480,7 @@ with tab8:
             oheatmap = create_organ_heatmap(df, sel_organs)
             if oheatmap.data and hasattr(oheatmap.data[0], 'z') and oheatmap.data[0].z is not None:
                 st.subheader("Gene × Organ Heatmap")
-                st.plotly_chart(oheatmap, use_container_width=True)
+                st.plotly_chart(oheatmap, width="stretch")
                 add_download_buttons(st, oheatmap, "organ_toxicity_heatmap")
                 _png = fig_to_png(oheatmap)
                 if _png:
@@ -489,7 +489,7 @@ with tab8:
             organ_gene_tbl = get_organ_gene_table(df, sel_organs)
             if not organ_gene_tbl.empty:
                 st.subheader("Genes with Organ Toxicity Associations")
-                st.dataframe(organ_gene_tbl, use_container_width=True, hide_index=True)
+                st.dataframe(organ_gene_tbl, width="stretch", hide_index=True)
                 csv = organ_gene_tbl.to_csv(index=False)
                 st.download_button("Download organ toxicity genes (CSV)", csv, "organ_toxicity_genes.csv", "text/csv")
                 st.session_state["data_csvs"]["organ_toxicity_genes.csv"] = csv.encode()
@@ -538,9 +538,9 @@ with tab9:
                     import matplotlib.pyplot as plt
                     plt.close(venn_fig)
 
-                    st.dataframe(overlap_df, use_container_width=True, hide_index=True)
+                    st.dataframe(overlap_df, width="stretch", hide_index=True)
                     net = create_network_graph(overlap_df, disease_name)
-                    st.plotly_chart(net, use_container_width=True)
+                    st.plotly_chart(net, width="stretch")
                     add_download_buttons(st, net, "disease_network")
                     _png = fig_to_png(net)
                     if _png:
